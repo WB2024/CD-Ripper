@@ -1,3 +1,5 @@
+# [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow?logo=buy-me-a-coffee)](https://buymeacoffee.com/succinctrecords)
+
 # CD Ripper - Audio & Enhanced Content
 
 A comprehensive, interactive CD ripping tool that extracts audio tracks to FLAC format and handles enhanced CD content (videos, images, extras) with automatic metadata lookup and quality verification.
