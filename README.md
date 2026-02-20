@@ -1,12 +1,20 @@
 # [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow?logo=buy-me-a-coffee)](https://buymeacoffee.com/succinctrecords)
 
-# CD Ripper - Audio & Enhanced Content
+# CD & DVD Ripper Suite
 
-A comprehensive, interactive CD ripping tool that extracts audio tracks to FLAC format and handles enhanced CD content (videos, images, extras) with automatic metadata lookup and quality verification.
+A comprehensive media ripping toolkit containing:
+- **CD Ripper** - Extract audio CDs to FLAC with metadata and enhanced content support
+- **DVD Ripper** - Extract music DVDs with configurable output formats (MP4, MKV, HEVC, audio-only)
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.6%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
+
+---
+
+# CD Ripper - Audio & Enhanced Content
+
+A comprehensive, interactive CD ripping tool that extracts audio tracks to FLAC format and handles enhanced CD content (videos, images, extras) with automatic metadata lookup and quality verification.
 
 ## Features
 
@@ -527,7 +535,7 @@ A: Typically 5-15 minutes depending on:
 - System performance
 
 **Q: Can I rip DVDs or Blu-rays?**  
-A: No, this tool is for audio CDs only. For DVDs, use tools like HandBrake or MakeMKV.
+A: Yes! Use the included `dvd-ripper.py` for music DVDs. For Blu-rays, use MakeMKV directly.
 
 **Q: What's the difference between CDDB and MusicBrainz?**  
 A: Both are metadata databases. CDDB (now Gracenote) is older and more reliable. MusicBrainz is open-source but sometimes has API issues.
@@ -621,4 +629,249 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ---
 
-**Happy Ripping! 💿**
+# DVD Ripper - Music DVD Edition
+
+A companion tool for extracting and converting music DVD content with configurable output formats. Uses MakeMKV for extraction and FFmpeg for conversion.
+
+## DVD Ripper Features
+
+### Video Extraction
+- 📀 **MakeMKV Backend** - Handles encrypted/protected DVDs
+- 🎬 **Multiple Formats** - MP4, MKV, HEVC output options
+- ⚙️ **Quality Presets** - High, Balanced, Fast encoding
+- 🎵 **Audio Extraction** - FLAC/MP3 audio-only mode
+
+### Output Formats
+
+| Format | Codec | Best For |
+|--------|-------|----------|
+| MP4 (H.264) | libx264 | Maximum compatibility |
+| MKV (H.264) | libx264 | Multiple audio/subtitle tracks |
+| MP4 (H.265) | libx265 | Smaller files, modern devices |
+| FLAC | flac | Lossless audio extraction |
+| MP3 | libmp3lame | Compressed audio |
+
+### Quality Presets
+
+| Preset | CRF | Speed | File Size |
+|--------|-----|-------|-----------|
+| High Quality | 18 | Slow | Larger |
+| Balanced | 22 | Medium | Moderate |
+| Fast/Smaller | 26 | Fast | Smaller |
+
+## DVD Ripper Requirements
+
+### Additional Packages
+- `makemkv-bin` - MakeMKV binary
+- `makemkv-oss` - MakeMKV open-source components
+- `lsdvd` - DVD information tool
+- `ffmpeg` - Video/audio processing (shared with CD ripper)
+
+## DVD Ripper Installation
+
+### Ubuntu/Debian
+
+```bash
+# Add MakeMKV PPA
+sudo add-apt-repository ppa:heyarje/makemkv-beta
+sudo apt update
+
+# Install packages
+sudo apt install makemkv-bin makemkv-oss lsdvd ffmpeg
+
+# Download DVD ripper script
+curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
+chmod +x dvd-ripper.py
+sudo mv dvd-ripper.py /usr/local/bin/
+sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+```
+
+### Other Distributions
+
+Download MakeMKV from [https://www.makemkv.com/download/](https://www.makemkv.com/download/)
+
+## DVD Ripper Usage
+
+### Basic Workflow
+
+```bash
+dvd-ripper
+```
+
+1. **Insert DVD** into your drive
+2. **Select output format** - MP4, MKV, HEVC, or Audio-only
+3. **Select quality preset** - High, Balanced, or Fast
+4. **Enter metadata** - Artist name, album/DVD title
+5. **Choose ripping mode**:
+   - Batch Mode: Process all titles automatically
+   - Selective Mode: Choose specific titles to rip
+6. **Wait for extraction and conversion**
+7. **Eject DVD** when complete
+
+### Example Session
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║              DVD Ripper - Music DVD Edition               ║
+╚═══════════════════════════════════════════════════════════╝
+
+============================================================
+                   Checking Dependencies
+============================================================
+
+✓ MakeMKV is installed
+✓ FFmpeg is installed
+✓ FFprobe is installed
+✓ lsdvd is installed
+
+============================================================
+                     Checking for DVD
+============================================================
+
+✓ DVD detected!
+
+============================================================
+                      Analyzing DVD
+============================================================
+
+  Disc Title: MUSIC_CONCERT_2024
+  Titles found: 12
+
+============================================================
+                   Select Output Format
+============================================================
+
+  1. MP4 (H.264)
+     Most compatible - works on all devices
+  2. MKV (H.264)
+     Best for multiple audio/subtitle tracks
+  3. MP4 (H.265/HEVC)
+     Smaller files, modern devices only
+  4. Audio Only (FLAC)
+     Lossless audio extraction
+  5. Audio Only (MP3)
+     Compressed audio extraction
+
+Select option (1-5): 1
+✓ Selected: MP4 (H.264)
+
+============================================================
+                  Select Quality Preset
+============================================================
+
+  1. High Quality (Larger files)
+     Best quality, larger file size
+  2. Balanced (Recommended)
+     Good quality with reasonable file size
+  3. Fast/Smaller (Lower quality)
+     Faster encoding, smaller files
+
+Select option (1-3): 2
+✓ Selected: Balanced (Recommended)
+
+============================================================
+                     Output Settings
+============================================================
+
+Enter Artist/Band name [Unknown Artist]: The Rolling Stones
+Enter Album/DVD title [MUSIC_CONCERT_2024]: Live Concert 2024
+✓ Output directory: /srv/.../DVD Rips/The Rolling Stones/Live Concert 2024
+
+Would you like to proceed with ripping this DVD? (y/n): y
+
+Select ripping mode:
+  1. Batch Mode - Rip all titles automatically
+  2. Selective Mode - Choose which titles to rip
+Select mode (1/2): 1
+
+[Extraction and conversion progress...]
+
+============================================================
+                     Ripping Summary
+============================================================
+
+Converted files:
+  ✓ 01 - Track 01.mp4 (450.2 MB)
+  ✓ 02 - Track 02.mp4 (380.1 MB)
+  ✓ 03 - Track 03.mp4 (520.5 MB)
+
+Total: 12 file(s), 5.2 GB
+Location: /srv/.../DVD Rips/The Rolling Stones/Live Concert 2024
+
+✓ Permissions set successfully (777)
+
+Would you like to eject the DVD? (y/n): y
+✓ DVD ejected
+
+============================================================
+                     Ripping Complete!
+============================================================
+✓ All operations completed successfully
+```
+
+## DVD Output Structure
+
+```
+DVD Rips/
+└── Artist Name/
+    └── Album or DVD Title/
+        ├── 01 - Track 01.mp4
+        ├── 02 - Track 02.mp4
+        ├── 03 - Track 03.mp4
+        └── ...
+```
+
+## DVD Ripper Configuration
+
+### Change Output Directory
+
+Edit `dvd-ripper.py` and modify:
+```python
+self.base_output_dir = "/your/preferred/path"
+```
+
+### Change DVD Device
+
+Edit `dvd-ripper.py` and modify:
+```python
+self.dvd_device = "/dev/sr0"  # Change to your device
+```
+
+## DVD Ripper Troubleshooting
+
+### "MakeMKV not found"
+
+```bash
+# Install from PPA (Ubuntu/Debian)
+sudo add-apt-repository ppa:heyarje/makemkv-beta
+sudo apt update
+sudo apt install makemkv-bin makemkv-oss
+
+# Or download from makemkv.com for other distros
+```
+
+### "No DVD detected"
+
+```bash
+# Check drive
+ls -l /dev/sr*
+
+# Test with lsdvd
+lsdvd /dev/sr0
+```
+
+### "MakeMKV extraction failed"
+
+- Ensure MakeMKV is registered (free during beta)
+- Check if DVD is clean and readable
+- Try `makemkvcon info disc:0` manually
+
+### Encrypted/Protected DVDs
+
+MakeMKV handles most DVD encryption. If issues persist:
+- Update MakeMKV to latest version
+- Check MakeMKV forums for specific disc issues
+
+---
+
+**Happy Ripping! 💿📀**
