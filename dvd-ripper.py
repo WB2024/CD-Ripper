@@ -2,17 +2,15 @@
 """
 DVD Ripper - Music DVD Content Extraction
 Automates DVD ripping with configurable output formats (MP4, MKV, HEVC, Audio-only)
-Uses MakeMKV for extraction and FFmpeg for conversion
+Uses HandBrake CLI (free, GPLv2) for extraction and conversion
 """
 
 import os
 import subprocess
 import sys
-import time
-import json
+import re
 import shutil
 from pathlib import Path
-from datetime import datetime
 
 class Colors:
     """ANSI color codes for terminal output"""
@@ -27,72 +25,75 @@ class Colors:
     UNDERLINE = '\033[4m'
 
 class OutputFormat:
-    """Output format configurations"""
+    """Output format configurations for HandBrake"""
     FORMATS = {
         '1': {
             'name': 'MP4 (H.264)',
             'extension': 'mp4',
-            'video_codec': 'libx264',
-            'audio_codec': 'aac',
-            'container': 'mp4',
+            'encoder': 'x264',
+            'format': 'av_mp4',
+            'aencoder': 'av_aac',
             'description': 'Most compatible - works on all devices'
         },
         '2': {
             'name': 'MKV (H.264)',
             'extension': 'mkv',
-            'video_codec': 'libx264',
-            'audio_codec': 'flac',
-            'container': 'matroska',
+            'encoder': 'x264',
+            'format': 'av_mkv',
+            'aencoder': 'flac24',
             'description': 'Best for multiple audio/subtitle tracks'
         },
         '3': {
             'name': 'MP4 (H.265/HEVC)',
             'extension': 'mp4',
-            'video_codec': 'libx265',
-            'audio_codec': 'aac',
-            'container': 'mp4',
+            'encoder': 'x265',
+            'format': 'av_mp4',
+            'aencoder': 'av_aac',
             'description': 'Smaller files, modern devices only'
         },
         '4': {
             'name': 'Audio Only (FLAC)',
             'extension': 'flac',
-            'video_codec': None,
-            'audio_codec': 'flac',
-            'container': 'flac',
+            'encoder': None,
+            'format': None,
+            'aencoder': 'flac24',
             'description': 'Lossless audio extraction'
         },
         '5': {
             'name': 'Audio Only (MP3)',
             'extension': 'mp3',
-            'video_codec': None,
-            'audio_codec': 'libmp3lame',
-            'container': 'mp3',
+            'encoder': None,
+            'format': None,
+            'aencoder': 'mp3',
             'description': 'Compressed audio extraction'
         }
     }
 
 class QualityPreset:
-    """Quality presets for video encoding"""
+    """Quality presets for HandBrake encoding"""
     PRESETS = {
         '1': {
             'name': 'High Quality (Larger files)',
-            'crf': 18,
+            'quality': 18,
             'preset': 'slow',
-            'audio_bitrate': '320k',
+            'audio_bitrate': '320',
+            'hb_preset': 'HQ 480p30 Surround',
             'description': 'Best quality, larger file size'
         },
         '2': {
             'name': 'Balanced (Recommended)',
-            'crf': 22,
+            'quality': 22,
             'preset': 'medium',
-            'audio_bitrate': '256k',
+            'audio_bitrate': '256',
+            'hb_preset': 'Fast 480p30',
             'description': 'Good quality with reasonable file size'
         },
         '3': {
             'name': 'Fast/Smaller (Lower quality)',
-            'crf': 26,
+            'quality': 26,
             'preset': 'fast',
-            'audio_bitrate': '192k',
+            'audio_bitrate': '192',
+            'hb_preset': 'Very Fast 480p30',
             'description': 'Faster encoding, smaller files'
         }
     }
@@ -101,11 +102,11 @@ class DVDRipper:
     def __init__(self):
         self.dvd_device = "/dev/sr0"
         self.base_output_dir = "/srv/dev-disk-by-uuid-dc4918d5-6597-465b-9567-ce442fbd8e2a/DVD Rips"
-        self.temp_dir = "/tmp/dvd-ripper"
         self.current_rip_dir = None
         self.selected_format = None
         self.selected_quality = None
         self.dvd_info = None
+        self.titles = []
         
     def print_header(self, text):
         """Print a formatted header"""
@@ -195,50 +196,61 @@ class DVDRipper:
         self.print_header("Checking Dependencies")
         
         dependencies = {
-            'makemkvcon': {'package': 'makemkv-bin makemkv-oss', 'name': 'MakeMKV'},
+            'HandBrakeCLI': {'package': 'handbrake-cli', 'name': 'HandBrake CLI'},
             'ffmpeg': {'package': 'ffmpeg', 'name': 'FFmpeg'},
             'ffprobe': {'package': 'ffmpeg', 'name': 'FFprobe'},
             'lsdvd': {'package': 'lsdvd', 'name': 'lsdvd'}
         }
         
         missing = []
+        missing_packages = []
+        
         for cmd, info in dependencies.items():
             returncode, _, _ = self.run_command(f"which {cmd}")
             if returncode == 0:
                 self.print_success(f"{info['name']} is installed")
             else:
                 self.print_error(f"{info['name']} is NOT installed")
-                if info['package'] not in missing:
-                    missing.append(info['package'])
+                missing.append(info['name'])
+                if info['package'] not in missing_packages:
+                    missing_packages.append(info['package'])
+        
+        # Check for libdvdcss (needed for encrypted DVDs)
+        returncode, _, _ = self.run_command("ldconfig -p | grep libdvdcss")
+        if returncode == 0:
+            self.print_success("libdvdcss is installed (DVD decryption)")
+        else:
+            self.print_warning("libdvdcss not found - encrypted DVDs may not work")
+            missing.append("libdvd-pkg")
+            missing_packages.append("libdvd-pkg")
         
         if missing:
-            self.print_warning(f"\nMissing packages: {', '.join(missing)}")
-            print(f"\n{Colors.OKCYAN}To install MakeMKV on Ubuntu/Debian:{Colors.ENDC}")
-            print("  sudo add-apt-repository ppa:heyarje/makemkv-beta")
-            print("  sudo apt update")
-            print("  sudo apt install makemkv-bin makemkv-oss lsdvd ffmpeg")
-            print(f"\n{Colors.OKCYAN}For other distributions, visit:{Colors.ENDC}")
-            print("  https://www.makemkv.com/download/")
+            self.print_warning(f"\nMissing: {', '.join(missing)}")
+            print(f"\n{Colors.OKCYAN}To install on Debian/Ubuntu:{Colors.ENDC}")
+            print(f"  sudo apt update")
+            print(f"  sudo apt install {' '.join(missing_packages)}")
+            print(f"  sudo dpkg-reconfigure libdvd-pkg  # Downloads libdvdcss")
             
-            if not self.yes_no_prompt("\nWould you like to attempt automatic installation?"):
+            if self.yes_no_prompt("\nWould you like to attempt automatic installation?"):
+                self.print_info("Installing missing packages...")
+                self.run_command("apt update", show_output=True)
+                
+                for pkg in missing_packages:
+                    self.print_info(f"Installing {pkg}...")
+                    returncode, _, _ = self.run_command(f"apt install -y {pkg}", show_output=True)
+                    if returncode != 0:
+                        self.print_error(f"Failed to install {pkg}")
+                
+                # Configure libdvd-pkg if installed
+                if "libdvd-pkg" in missing_packages:
+                    self.print_info("Configuring libdvd-pkg (this downloads libdvdcss)...")
+                    self.run_command("dpkg-reconfigure libdvd-pkg", show_output=True)
+                
+                self.print_success("Installation complete - please re-run the script")
+                return False
+            else:
                 self.print_error("Cannot proceed without required packages")
                 return False
-            
-            # Try to install
-            self.print_info("Attempting to install missing packages...")
-            
-            # Add PPA for MakeMKV
-            self.run_command("add-apt-repository -y ppa:heyarje/makemkv-beta 2>/dev/null", show_output=True)
-            self.run_command("apt update", show_output=True)
-            
-            for pkg in missing:
-                self.print_info(f"Installing {pkg}...")
-                returncode, _, _ = self.run_command(f"apt install -y {pkg}", show_output=True)
-                if returncode != 0:
-                    self.print_error(f"Failed to install {pkg}")
-                    return False
-            
-            self.print_success("Packages installed successfully")
         
         return True
     
@@ -247,9 +259,10 @@ class DVDRipper:
         self.print_header("Checking for DVD")
         
         # Try lsdvd first
-        returncode, stdout, _ = self.run_command(f"lsdvd {self.dvd_device} 2>&1", capture_output=True)
+        returncode, stdout, stderr = self.run_command(f"lsdvd {self.dvd_device} 2>&1", capture_output=True)
         
-        if returncode != 0 or "cannot open" in stdout.lower() or "no such file" in stdout.lower():
+        combined = (stdout or "") + (stderr or "")
+        if returncode != 0 or "cannot open" in combined.lower() or "no such file" in combined.lower():
             self.print_warning("No DVD detected in drive")
             input(f"{Colors.WARNING}Please insert a DVD and press Enter...{Colors.ENDC}")
             return self.check_dvd_inserted()  # Recursive check
@@ -258,54 +271,97 @@ class DVDRipper:
             return True
     
     def get_dvd_info(self):
-        """Get DVD information using lsdvd and makemkvcon"""
+        """Get DVD information using lsdvd and HandBrake"""
         self.print_header("Analyzing DVD")
         
         # Get basic info with lsdvd
         returncode, stdout, _ = self.run_command(f"lsdvd -x {self.dvd_device} 2>&1", capture_output=True)
         
-        if returncode == 0:
+        dvd_title = "Unknown DVD"
+        self.titles = []
+        
+        if returncode == 0 and stdout:
             print(f"\n{Colors.OKCYAN}DVD Information:{Colors.ENDC}")
             
             # Parse lsdvd output
-            dvd_title = "Unknown DVD"
-            titles = []
-            
             for line in stdout.split('\n'):
                 if 'Disc Title:' in line:
                     dvd_title = line.split(':', 1)[1].strip()
                     print(f"  Disc Title: {Colors.BOLD}{dvd_title}{Colors.ENDC}")
-                elif line.startswith('Title:'):
-                    titles.append(line)
-            
-            if titles:
-                print(f"\n{Colors.OKCYAN}Titles found: {len(titles)}{Colors.ENDC}")
-                for title in titles[:10]:  # Show first 10
-                    print(f"  {title}")
-                if len(titles) > 10:
-                    print(f"  ... and {len(titles) - 10} more titles")
-            
-            self.dvd_info = {
-                'title': dvd_title,
-                'num_titles': len(titles),
-                'raw_output': stdout
-            }
+                elif line.strip().startswith('Title:'):
+                    # Parse title info: "Title: 01, Length: 00:45:30.123 Chapters: 12, ..."
+                    title_match = re.search(r'Title:\s*(\d+)', line)
+                    length_match = re.search(r'Length:\s*([\d:\.]+)', line)
+                    chapters_match = re.search(r'Chapters:\s*(\d+)', line)
+                    
+                    if title_match:
+                        title_num = int(title_match.group(1))
+                        length = length_match.group(1) if length_match else "Unknown"
+                        chapters = int(chapters_match.group(1)) if chapters_match else 0
+                        
+                        self.titles.append({
+                            'number': title_num,
+                            'length': length,
+                            'chapters': chapters
+                        })
         
-        # Also get MakeMKV info
-        self.print_info("\nScanning with MakeMKV (this may take a moment)...")
-        returncode, stdout, _ = self.run_command(f"makemkvcon -r info disc:0 2>&1", capture_output=True)
+        self.dvd_info = {
+            'title': dvd_title,
+            'num_titles': len(self.titles)
+        }
         
-        if returncode == 0 and stdout:
-            # Parse MakeMKV output for more details
-            for line in stdout.split('\n'):
-                if 'TINFO' in line and ',2,' in line:  # Title name
-                    parts = line.split(',')
-                    if len(parts) >= 4:
-                        title_name = parts[3].strip('"')
-                        if title_name and 'title' not in title_name.lower():
-                            print(f"  Found content: {title_name}")
+        # Get more detailed info with HandBrake
+        self.print_info("\nScanning with HandBrake (this may take a moment)...")
+        returncode, stdout, stderr = self.run_command(
+            f'HandBrakeCLI --input {self.dvd_device} --title 0 --scan 2>&1',
+            capture_output=True
+        )
+        
+        combined = (stdout or "") + (stderr or "")
+        
+        # Parse HandBrake scan output
+        if combined:
+            # Look for title information in HandBrake output
+            hb_titles = []
+            current_title = None
             
-            self.dvd_info['makemkv_output'] = stdout
+            for line in combined.split('\n'):
+                # Match: "+ title 1:"
+                title_match = re.match(r'\s*\+\s*title\s+(\d+):', line)
+                if title_match:
+                    if current_title:
+                        hb_titles.append(current_title)
+                    current_title = {
+                        'number': int(title_match.group(1)),
+                        'duration': 'Unknown',
+                        'chapters': 0
+                    }
+                
+                # Match: "  + duration: 00:45:30"
+                duration_match = re.search(r'duration:\s*([\d:]+)', line)
+                if duration_match and current_title:
+                    current_title['duration'] = duration_match.group(1)
+                
+                # Match: "  + chapters:"
+                if '+ chapters:' in line.lower() and current_title:
+                    # Count chapter lines that follow
+                    pass
+            
+            if current_title:
+                hb_titles.append(current_title)
+            
+            # Use HandBrake titles if we found more detail
+            if hb_titles:
+                self.titles = hb_titles
+        
+        # Display titles
+        if self.titles:
+            print(f"\n{Colors.OKCYAN}Titles found: {len(self.titles)}{Colors.ENDC}")
+            for t in self.titles[:15]:  # Show first 15
+                duration = t.get('duration') or t.get('length', 'Unknown')
+                print(f"  Title {t['number']:2d}: {duration}")
+            if len(self.titles) > 15:
+                print(f"  ... and {len(self.titles) - 15} more titles")
         
         return self.dvd_info
     
@@ -322,7 +378,7 @@ class DVDRipper:
     def select_quality_preset(self):
         """Let user select quality preset"""
         # Only ask for quality if not audio-only
-        if self.selected_format and self.selected_format.get('video_codec') is None:
+        if self.selected_format and self.selected_format.get('encoder') is None:
             self.print_info("Audio-only format selected - using best quality")
             self.selected_quality = QualityPreset.PRESETS['1']
             return self.selected_quality
@@ -354,51 +410,9 @@ class DVDRipper:
         self.print_success(f"Output directory: {self.current_rip_dir}")
         return artist, album
     
-    def rip_dvd_with_makemkv(self):
-        """Extract DVD content using MakeMKV"""
-        self.print_header("Extracting DVD Content")
+    def rip_title_handbrake(self, title_num, output_name, track_num=None):
+        """Rip a single title using HandBrake CLI"""
         
-        # Create temp directory
-        os.makedirs(self.temp_dir, exist_ok=True)
-        
-        self.print_info("Extracting titles with MakeMKV...")
-        self.print_info("This may take several minutes depending on DVD size...")
-        
-        # Use MakeMKV to extract all titles to MKV
-        cmd = f'makemkvcon mkv disc:0 all "{self.temp_dir}" --progress=-same'
-        returncode, _, _ = self.run_command(cmd, show_output=True)
-        
-        if returncode != 0:
-            self.print_error("MakeMKV extraction failed")
-            return False
-        
-        # Check what was extracted
-        extracted_files = list(Path(self.temp_dir).glob("*.mkv"))
-        
-        if not extracted_files:
-            self.print_error("No files were extracted")
-            return False
-        
-        self.print_success(f"Extracted {len(extracted_files)} title(s)")
-        for f in extracted_files:
-            size_mb = f.stat().st_size / (1024 * 1024)
-            print(f"  - {f.name} ({size_mb:.1f} MB)")
-        
-        return extracted_files
-    
-    def get_video_duration(self, input_file):
-        """Get video duration using ffprobe"""
-        cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{input_file}"'
-        returncode, stdout, _ = self.run_command(cmd, capture_output=True)
-        if returncode == 0 and stdout:
-            try:
-                return float(stdout.strip())
-            except:
-                pass
-        return None
-    
-    def convert_file(self, input_file, output_name, track_num=None):
-        """Convert extracted file to selected format"""
         # Build output filename
         if track_num:
             output_filename = f"{track_num:02d} - {output_name}.{self.selected_format['extension']}"
@@ -407,115 +421,137 @@ class DVDRipper:
         
         output_path = os.path.join(self.current_rip_dir, output_filename)
         
-        # Build FFmpeg command based on format
-        if self.selected_format.get('video_codec') is None:
-            # Audio-only extraction
-            if self.selected_format['audio_codec'] == 'flac':
-                cmd = f'ffmpeg -i "{input_file}" -vn -acodec flac "{output_path}" -y'
-            else:
-                cmd = f'ffmpeg -i "{input_file}" -vn -acodec {self.selected_format["audio_codec"]} -ab {self.selected_quality["audio_bitrate"]} "{output_path}" -y'
-        else:
-            # Video conversion
-            video_codec = self.selected_format['video_codec']
-            audio_codec = self.selected_format['audio_codec']
-            crf = self.selected_quality['crf']
-            preset = self.selected_quality['preset']
-            audio_bitrate = self.selected_quality['audio_bitrate']
-            
-            # Add HEVC-specific options
-            if video_codec == 'libx265':
-                codec_opts = f'-c:v {video_codec} -crf {crf} -preset {preset} -tag:v hvc1'
-            else:
-                codec_opts = f'-c:v {video_codec} -crf {crf} -preset {preset}'
-            
-            # Handle audio
-            if audio_codec == 'flac':
-                audio_opts = '-c:a flac'
-            elif audio_codec == 'aac':
-                audio_opts = f'-c:a aac -b:a {audio_bitrate}'
-            else:
-                audio_opts = f'-c:a {audio_codec} -b:a {audio_bitrate}'
-            
-            cmd = f'ffmpeg -i "{input_file}" {codec_opts} {audio_opts} "{output_path}" -y'
+        # Check if audio-only
+        if self.selected_format.get('encoder') is None:
+            # Use FFmpeg for audio extraction (more reliable for audio-only)
+            return self.extract_audio_ffmpeg(title_num, output_path)
         
-        self.print_info(f"Converting to {self.selected_format['name']}...")
+        # Build HandBrake command
+        encoder = self.selected_format['encoder']
+        format_type = self.selected_format['format']
+        aencoder = self.selected_format['aencoder']
+        quality = self.selected_quality['quality']
+        preset = self.selected_quality['preset']
+        audio_bitrate = self.selected_quality['audio_bitrate']
         
-        # Get duration for progress estimation
-        duration = self.get_video_duration(input_file)
-        if duration:
-            self.print_info(f"Duration: {int(duration // 60)}m {int(duration % 60)}s")
+        cmd_parts = [
+            'HandBrakeCLI',
+            f'--input {self.dvd_device}',
+            f'--title {title_num}',
+            f'--output "{output_path}"',
+            f'--format {format_type}',
+            f'--encoder {encoder}',
+            f'--quality {quality}',
+            f'--encoder-preset {preset}',
+            f'--aencoder {aencoder}',
+            f'--ab {audio_bitrate}',
+            '--all-audio',  # Include all audio tracks
+            '--all-subtitles',  # Include all subtitles
+            '--markers',  # Include chapter markers
+        ]
+        
+        # Add HEVC-specific options for Apple compatibility
+        if encoder == 'x265':
+            cmd_parts.append('--encoder-tune fastdecode')
+        
+        cmd = ' '.join(cmd_parts)
+        
+        self.print_info(f"Ripping title {title_num} to {self.selected_format['name']}...")
         
         returncode, _, stderr = self.run_command(cmd, show_output=True)
         
         if returncode == 0 and os.path.exists(output_path):
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
-            self.print_success(f"Converted: {output_filename} ({size_mb:.1f} MB)")
+            self.print_success(f"Completed: {output_filename} ({size_mb:.1f} MB)")
             return output_path
         else:
-            self.print_error(f"Conversion failed for {output_name}")
+            self.print_error(f"Failed to rip title {title_num}")
             if stderr:
                 print(f"  Error: {stderr[:200]}")
             return None
     
-    def convert_all_titles(self, extracted_files):
-        """Convert all extracted titles"""
-        self.print_header("Converting Titles")
+    def extract_audio_ffmpeg(self, title_num, output_path):
+        """Extract audio from DVD title using FFmpeg"""
+        self.print_info(f"Extracting audio from title {title_num}...")
         
-        converted = []
-        total = len(extracted_files)
+        # First, use HandBrake to extract to a temp MKV with audio
+        temp_mkv = f"/tmp/dvd_audio_temp_{title_num}.mkv"
         
-        for i, mkv_file in enumerate(extracted_files, 1):
-            self.print_info(f"\nProcessing title {i}/{total}: {mkv_file.name}")
-            
-            # Get a nice output name
-            base_name = mkv_file.stem
-            # Try to make it nicer
-            if base_name.startswith('title'):
-                output_name = f"Track {i:02d}"
-            else:
-                output_name = base_name.replace('_', ' ').title()
-            
-            # Allow user to rename
-            if self.yes_no_prompt(f"Rename '{output_name}'?"):
-                output_name = self.get_input("Enter new name", output_name)
-            
-            result = self.convert_file(str(mkv_file), output_name, track_num=i)
-            if result:
-                converted.append(result)
+        # Extract with HandBrake first (handles DVD structure)
+        cmd = f'HandBrakeCLI --input {self.dvd_device} --title {title_num} --output "{temp_mkv}" --format av_mkv --encoder x264 --quality 30 --encoder-preset ultrafast --aencoder copy'
         
-        return converted
-    
-    def cleanup_temp(self):
-        """Clean up temporary files"""
-        if os.path.exists(self.temp_dir):
-            self.print_info("Cleaning up temporary files...")
-            try:
-                shutil.rmtree(self.temp_dir)
-                self.print_success("Temporary files removed")
-            except Exception as e:
-                self.print_warning(f"Could not remove temp files: {e}")
-    
-    def eject_dvd(self):
-        """Eject the DVD"""
-        self.print_info("Ejecting DVD...")
-        self.run_command(f"eject {self.dvd_device}")
-        self.print_success("DVD ejected")
+        returncode, _, _ = self.run_command(cmd, show_output=True)
+        
+        if returncode != 0 or not os.path.exists(temp_mkv):
+            self.print_error("Failed to extract title for audio processing")
+            return None
+        
+        # Now extract audio with FFmpeg
+        ext = self.selected_format['extension']
+        
+        if ext == 'flac':
+            audio_cmd = f'ffmpeg -i "{temp_mkv}" -vn -acodec flac "{output_path}" -y'
+        else:  # mp3
+            bitrate = self.selected_quality['audio_bitrate']
+            audio_cmd = f'ffmpeg -i "{temp_mkv}" -vn -acodec libmp3lame -ab {bitrate}k "{output_path}" -y'
+        
+        returncode, _, _ = self.run_command(audio_cmd, show_output=True)
+        
+        # Clean up temp file
+        if os.path.exists(temp_mkv):
+            os.remove(temp_mkv)
+        
+        if returncode == 0 and os.path.exists(output_path):
+            size_mb = os.path.getsize(output_path) / (1024 * 1024)
+            self.print_success(f"Audio extracted: {os.path.basename(output_path)} ({size_mb:.1f} MB)")
+            return output_path
+        else:
+            self.print_error("Audio extraction failed")
+            return None
     
     def run_batch_mode(self):
         """Run in batch mode - process all titles automatically"""
-        self.print_header("Batch Mode")
+        self.print_header("Batch Mode - Ripping All Titles")
         
-        # Rip with MakeMKV
-        extracted_files = self.rip_dvd_with_makemkv()
-        if not extracted_files:
+        if not self.titles:
+            self.print_error("No titles found on DVD")
             return False
         
-        # Convert all
-        converted = self.convert_all_titles(extracted_files)
+        # Filter to main content (titles > 1 minute typically)
+        main_titles = []
+        for t in self.titles:
+            duration = t.get('duration') or t.get('length', '00:00:00')
+            # Parse duration to check if > 1 minute
+            try:
+                parts = duration.split(':')
+                if len(parts) >= 2:
+                    minutes = int(parts[0]) * 60 + int(parts[1]) if len(parts) == 3 else int(parts[0])
+                    if minutes >= 1:
+                        main_titles.append(t)
+            except:
+                main_titles.append(t)  # Include if we can't parse
         
-        # Cleanup
-        if self.yes_no_prompt("Remove temporary MKV files?"):
-            self.cleanup_temp()
+        if not main_titles:
+            main_titles = self.titles
+        
+        self.print_info(f"Processing {len(main_titles)} title(s)...")
+        
+        converted = []
+        for i, title in enumerate(main_titles, 1):
+            title_num = title['number']
+            duration = title.get('duration') or title.get('length', 'Unknown')
+            
+            self.print_info(f"\n[{i}/{len(main_titles)}] Title {title_num} ({duration})")
+            
+            output_name = f"Track {i:02d}"
+            
+            # Allow rename
+            if self.yes_no_prompt(f"Rename '{output_name}'?"):
+                output_name = self.get_input("Enter new name", output_name)
+            
+            result = self.rip_title_handbrake(title_num, output_name, track_num=i)
+            if result:
+                converted.append(result)
         
         return len(converted) > 0
     
@@ -523,69 +559,86 @@ class DVDRipper:
         """Run in selective mode - let user choose which titles to process"""
         self.print_header("Selective Mode")
         
-        # Rip with MakeMKV
-        extracted_files = self.rip_dvd_with_makemkv()
-        if not extracted_files:
+        if not self.titles:
+            self.print_error("No titles found on DVD")
             return False
         
-        # Show titles and let user select
-        print(f"\n{Colors.OKCYAN}Extracted titles:{Colors.ENDC}")
-        for i, f in enumerate(extracted_files, 1):
-            size_mb = f.stat().st_size / (1024 * 1024)
-            duration = self.get_video_duration(str(f))
-            dur_str = f"{int(duration // 60)}m {int(duration % 60)}s" if duration else "Unknown"
-            print(f"  {i}. {f.name} ({size_mb:.1f} MB, {dur_str})")
+        # Show titles
+        print(f"\n{Colors.OKCYAN}Available titles:{Colors.ENDC}")
+        for t in self.titles:
+            duration = t.get('duration') or t.get('length', 'Unknown')
+            print(f"  {t['number']:2d}. Duration: {duration}")
         
         # Let user select
-        selected_indices = self.get_input(
-            f"\nEnter title numbers to convert (e.g., 1,2,3 or 'all')",
+        selected_str = self.get_input(
+            f"\nEnter title numbers to rip (e.g., 1,2,3 or 'all')",
             "all"
         )
         
-        if selected_indices.lower() == 'all':
-            files_to_convert = extracted_files
+        if selected_str.lower() == 'all':
+            selected_titles = self.titles
         else:
             try:
-                indices = [int(x.strip()) - 1 for x in selected_indices.split(',')]
-                files_to_convert = [extracted_files[i] for i in indices if 0 <= i < len(extracted_files)]
+                selected_nums = [int(x.strip()) for x in selected_str.split(',')]
+                selected_titles = [t for t in self.titles if t['number'] in selected_nums]
             except:
                 self.print_warning("Invalid selection, processing all titles")
-                files_to_convert = extracted_files
+                selected_titles = self.titles
         
-        # Convert selected
+        if not selected_titles:
+            self.print_error("No titles selected")
+            return False
+        
+        self.print_info(f"\nProcessing {len(selected_titles)} selected title(s)...")
+        
         converted = []
-        for i, mkv_file in enumerate(files_to_convert, 1):
-            self.print_info(f"\nProcessing: {mkv_file.name}")
+        for i, title in enumerate(selected_titles, 1):
+            title_num = title['number']
+            duration = title.get('duration') or title.get('length', 'Unknown')
             
-            output_name = self.get_input(f"Enter name for this track", f"Track {i:02d}")
-            result = self.convert_file(str(mkv_file), output_name, track_num=i)
+            self.print_info(f"\n[{i}/{len(selected_titles)}] Title {title_num} ({duration})")
+            
+            output_name = self.get_input(f"Enter name for title {title_num}", f"Track {i:02d}")
+            
+            result = self.rip_title_handbrake(title_num, output_name, track_num=i)
             if result:
                 converted.append(result)
         
-        # Cleanup
-        if self.yes_no_prompt("Remove temporary MKV files?"):
-            self.cleanup_temp()
-        
         return len(converted) > 0
     
-    def show_summary(self, converted_files):
+    def show_summary(self):
         """Show ripping summary"""
         self.print_header("Ripping Summary")
         
-        if not converted_files:
-            self.print_warning("No files were converted")
+        if not self.current_rip_dir or not os.path.exists(self.current_rip_dir):
+            self.print_warning("No output directory found")
+            return
+        
+        # Find all output files
+        extensions = ['mp4', 'mkv', 'flac', 'mp3']
+        files = []
+        for ext in extensions:
+            files.extend(Path(self.current_rip_dir).glob(f"*.{ext}"))
+        
+        if not files:
+            self.print_warning("No files were created")
             return
         
         total_size = 0
-        print(f"{Colors.OKCYAN}Converted files:{Colors.ENDC}")
-        for f in converted_files:
-            if os.path.exists(f):
-                size_mb = os.path.getsize(f) / (1024 * 1024)
-                total_size += size_mb
-                print(f"  ✓ {os.path.basename(f)} ({size_mb:.1f} MB)")
+        print(f"{Colors.OKCYAN}Created files:{Colors.ENDC}")
+        for f in sorted(files):
+            size_mb = f.stat().st_size / (1024 * 1024)
+            total_size += size_mb
+            print(f"  ✓ {f.name} ({size_mb:.1f} MB)")
         
-        print(f"\n{Colors.OKGREEN}Total: {len(converted_files)} file(s), {total_size:.1f} MB{Colors.ENDC}")
+        print(f"\n{Colors.OKGREEN}Total: {len(files)} file(s), {total_size:.1f} MB{Colors.ENDC}")
         print(f"{Colors.OKGREEN}Location: {self.current_rip_dir}{Colors.ENDC}")
+    
+    def eject_dvd(self):
+        """Eject the DVD"""
+        self.print_info("Ejecting DVD...")
+        self.run_command(f"eject {self.dvd_device}")
+        self.print_success("DVD ejected")
     
     def run(self):
         """Main workflow"""
@@ -633,8 +686,7 @@ class DVDRipper:
             self.fix_permissions(self.current_rip_dir)
             
             # Show summary
-            converted_files = list(Path(self.current_rip_dir).glob(f"*.{self.selected_format['extension']}"))
-            self.show_summary([str(f) for f in converted_files])
+            self.show_summary()
         
         # Eject
         if self.yes_no_prompt("\nWould you like to eject the DVD?"):
@@ -657,7 +709,7 @@ def main():
 {Colors.HEADER}{Colors.BOLD}
 ╔═══════════════════════════════════════════════════════════╗
 ║              DVD Ripper - Music DVD Edition               ║
-║          Extract & Convert DVD Content Easily             ║
+║       Powered by HandBrake CLI (Free & Open Source)       ║
 ╚═══════════════════════════════════════════════════════════╝
 {Colors.ENDC}
     """)

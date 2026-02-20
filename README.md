@@ -535,7 +535,7 @@ A: Typically 5-15 minutes depending on:
 - System performance
 
 **Q: Can I rip DVDs or Blu-rays?**  
-A: Yes! Use the included `dvd-ripper.py` for music DVDs. For Blu-rays, use MakeMKV directly.
+A: Yes! Use the included `dvd-ripper.py` for music DVDs. For Blu-rays, use HandBrake or MakeMKV directly.
 
 **Q: What's the difference between CDDB and MusicBrainz?**  
 A: Both are metadata databases. CDDB (now Gracenote) is older and more reliable. MusicBrainz is open-source but sometimes has API issues.
@@ -631,140 +631,131 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 # DVD Ripper - Music DVD Edition
 
-A companion tool for extracting and converting music DVD content with configurable output formats. Uses MakeMKV for extraction and FFmpeg for conversion.
+A companion tool for extracting and converting music DVD content with configurable output formats. Uses **HandBrake CLI** (GPLv2, free forever) for extraction and conversion.
+
+## Why HandBrake?
+
+- **Free Forever** - GPLv2 open-source license, will never become paid software
+- **All-in-One** - Handles DVD decryption, extraction, and encoding in a single tool
+- **Actively Maintained** - Regular updates, large community, excellent documentation
+- **Built-in Presets** - Optimized quality settings out of the box
+- **libdvdcss Integration** - Handles encrypted DVDs when libdvdcss is installed
 
 ## DVD Ripper Features
 
 ### Video Extraction
-- 📀 **MakeMKV Backend** - Handles encrypted/protected DVDs
+- 📀 **HandBrake Backend** - Free, open-source DVD handling
+- 🔓 **DVD Decryption** - Works with libdvdcss for encrypted DVDs
 - 🎬 **Multiple Formats** - MP4, MKV, HEVC output options
 - ⚙️ **Quality Presets** - High, Balanced, Fast encoding
 - 🎵 **Audio Extraction** - FLAC/MP3 audio-only mode
 
 ### Output Formats
 
-| Format | Codec | Best For |
-|--------|-------|----------|
-| MP4 (H.264) | libx264 | Maximum compatibility |
-| MKV (H.264) | libx264 | Multiple audio/subtitle tracks |
-| MP4 (H.265) | libx265 | Smaller files, modern devices |
+| Format | Encoder | Best For |
+|--------|---------|----------|
+| MP4 (H.264) | x264 | Maximum compatibility |
+| MKV (H.264) | x264 | Multiple audio/subtitle tracks |
+| MP4 (H.265) | x265 | Smaller files, modern devices |
 | FLAC | flac | Lossless audio extraction |
-| MP3 | libmp3lame | Compressed audio |
+| MP3 | lame | Compressed audio |
 
 ### Quality Presets
 
-| Preset | CRF | Speed | File Size |
-|--------|-----|-------|-----------|
+| Preset | Quality (RF) | Speed | File Size |
+|--------|--------------|-------|-----------|
 | High Quality | 18 | Slow | Larger |
 | Balanced | 22 | Medium | Moderate |
 | Fast/Smaller | 26 | Fast | Smaller |
 
 ## DVD Ripper Requirements
 
-### Additional Packages
-- `makemkv-bin` - MakeMKV binary
-- `makemkv-oss` - MakeMKV open-source components
+### Required Packages
+- `handbrake-cli` - HandBrake command-line interface (GPLv2)
+- `libdvd-pkg` - Downloads and installs libdvdcss for DVD decryption
 - `lsdvd` - DVD information tool
-- `ffmpeg` - Video/audio processing (shared with CD ripper)
+- `ffmpeg` - Video/audio processing (for audio extraction)
 
 ## DVD Ripper Installation
 
-### Debian/OpenMediaVault
+### Debian/Ubuntu/OpenMediaVault (All Versions)
 
 ```bash
-# Install build dependencies and tools
+# Update package list
 sudo apt update
-sudo apt install build-essential pkg-config libc6-dev libssl-dev libexpat1-dev \
-  libavcodec-dev libgl1-mesa-dev qtbase5-dev zlib1g-dev lsdvd ffmpeg wget
 
-# Download and compile MakeMKV (latest version)
-cd /tmp
-wget https://www.makemkv.com/download/makemkv-bin-1.17.7.tar.gz
-wget https://www.makemkv.com/download/makemkv-oss-1.17.7.tar.gz
+# Install HandBrake CLI, FFmpeg, and lsdvd
+sudo apt install handbrake-cli ffmpeg lsdvd
 
-# Extract
-tar xzf makemkv-oss-1.17.7.tar.gz
-tar xzf makemkv-bin-1.17.7.tar.gz
-
-# Compile and install OSS (open source) components
-cd makemkv-oss-1.17.7
-./configure
-make
-sudo make install
-
-# Install binary components
-cd ../makemkv-bin-1.17.7
-make
-sudo make install
-
-# Update library cache
-sudo ldconfig
+# Install libdvdcss for encrypted DVD support
+sudo apt install libdvd-pkg
+sudo dpkg-reconfigure libdvd-pkg
 
 # Download DVD ripper script
-cd /srv/dev-disk-by-uuid-dc4918d5-6597-465b-9567-ce442fbd8e2a/Github/CD-Ripper
 curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
 chmod +x dvd-ripper.py
 sudo cp dvd-ripper.py /usr/local/bin/
-sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+sudo ln -sf /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
 
 # Verify installation
-makemkvcon --version
+HandBrakeCLI --version
 ```
 
-**Note:** MakeMKV version numbers change. Check [makemkv.com/download](https://www.makemkv.com/download/) for the latest version and update the URLs accordingly.
-
-### Ubuntu/Linux Mint
+### Ubuntu/Linux Mint (PPA for latest version)
 
 ```bash
-# Add MakeMKV PPA
-sudo add-apt-repository ppa:heyarje/makemkv-beta
+# Add HandBrake PPA for latest version (optional)
+sudo add-apt-repository ppa:stebbins/handbrake-releases
 sudo apt update
 
 # Install packages
-sudo apt install makemkv-bin makemkv-oss lsdvd ffmpeg
+sudo apt install handbrake-cli ffmpeg lsdvd libdvd-pkg
+sudo dpkg-reconfigure libdvd-pkg
 
 # Download DVD ripper script
 curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
 chmod +x dvd-ripper.py
 sudo mv dvd-ripper.py /usr/local/bin/
-sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+sudo ln -sf /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
 ```
 
 ### Arch Linux
 
 ```bash
-# Install from AUR
-yay -S makemkv lsdvd ffmpeg
-
-# Or using paru
-paru -S makemkv lsdvd ffmpeg
+# Install from official repos
+sudo pacman -S handbrake-cli ffmpeg lsdvd libdvdcss
 
 # Download DVD ripper script
 curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
 chmod +x dvd-ripper.py
 sudo mv dvd-ripper.py /usr/local/bin/
-sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+sudo ln -sf /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
 ```
 
 ### Fedora/RHEL/CentOS
 
 ```bash
-# Enable RPM Fusion repository
+# Enable RPM Fusion repository (for ffmpeg and libdvdcss)
 sudo dnf install https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
 
-# Install MakeMKV and dependencies
-sudo dnf install makemkv lsdvd ffmpeg
+# Install HandBrake CLI and dependencies
+sudo dnf install HandBrake-cli ffmpeg lsdvd libdvdcss
 
 # Download DVD ripper script
 curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
 chmod +x dvd-ripper.py
 sudo mv dvd-ripper.py /usr/local/bin/
-sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+sudo ln -sf /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
 ```
 
 ### Other Distributions
 
-Download MakeMKV from [https://www.makemkv.com/download/](https://www.makemkv.com/download/)
+HandBrake is available for most Linux distributions:
+- **Flatpak:** `flatpak install flathub fr.handbrake.ghb`
+- **Snap:** `snap install handbrake-jz` (includes CLI)
+- **From source:** [https://handbrake.fr/downloads.php](https://handbrake.fr/downloads.php)
+
+Don't forget to also install `libdvdcss` for encrypted DVD support.
 
 ## DVD Ripper Usage
 
@@ -789,16 +780,18 @@ dvd-ripper
 ```
 ╔═══════════════════════════════════════════════════════════╗
 ║              DVD Ripper - Music DVD Edition               ║
+║       Powered by HandBrake CLI (Free & Open Source)       ║
 ╚═══════════════════════════════════════════════════════════╝
 
 ============================================================
                    Checking Dependencies
 ============================================================
 
-✓ MakeMKV is installed
+✓ HandBrake CLI is installed
 ✓ FFmpeg is installed
 ✓ FFprobe is installed
 ✓ lsdvd is installed
+✓ libdvdcss is installed (DVD decryption)
 
 ============================================================
                      Checking for DVD
@@ -941,13 +934,7 @@ self.dvd_device = "/dev/sr0"  # Change to /dev/sr1, etc.
 
 ### Temp Directory
 
-MakeMKV extracts to a temporary directory before conversion. Default is `/tmp/dvd-ripper`.
-
-To change it (useful for large DVDs):
-
-```python
-self.temp_dir = "/tmp/dvd-ripper"  # Change to a location with more space
-```
+HandBrake encodes directly without an intermediate step, so no temporary directory is needed for most operations. Audio extraction uses a temporary MKV file in `/tmp`.
 
 ## Features Deep Dive
 
@@ -1015,24 +1002,23 @@ self.temp_dir = "/tmp/dvd-ripper"  # Change to a location with more space
 ### The Ripping Process
 
 1. **DVD Detection** - Checks if DVD is inserted and readable
-2. **Disc Analysis** - Scans DVD structure with lsdvd and MakeMKV
+2. **Disc Analysis** - Scans DVD structure with lsdvd and HandBrake
 3. **Format Selection** - User chooses output format and quality
 4. **Metadata Entry** - User provides artist/album information
-5. **MakeMKV Extraction** - Decrypts and extracts DVD titles to MKV
-6. **FFmpeg Conversion** - Transcodes MKV to selected format
-7. **Organization** - Moves files to artist/album folder structure
-8. **Cleanup** - Removes temporary MKV files
+5. **HandBrake Extraction & Encoding** - Single-pass decryption, extraction, and encoding
+6. **Organization** - Saves files to artist/album folder structure
+7. **Cleanup** - Sets permissions for network share access
 
-### MakeMKV vs Direct Ripping
+### Why HandBrake?
 
-**Why use MakeMKV as intermediate step?**
+**Advantages of HandBrake for DVD ripping:**
 
-- **Copy Protection:** MakeMKV handles CSS, region codes, and other protections
-- **VOB Handling:** Properly joins split VOB files into complete titles
-- **Track Detection:** Intelligently identifies main content vs. extras
-- **Quality:** Lossless extraction before encoding
-
-**Direct ripping with FFmpeg** would fail on encrypted DVDs and struggle with DVD structure.
+- **Free Forever:** GPLv2 license - will never become paid software
+- **All-in-One:** Decryption + extraction + encoding in a single pass
+- **libdvdcss Integration:** Handles CSS encryption when libdvdcss is installed
+- **Optimized Presets:** Built-in quality settings tested by experts
+- **Active Development:** Regular updates and large community support
+- **No Registration:** Unlike some alternatives, no keys or licenses required
 
 ## DVD Types Supported
 
@@ -1079,7 +1065,7 @@ dvd-ripper
 Use Selective Mode when DVDs have both main content and extras:
 
 1. Choose **Selective Mode** when prompted
-2. MakeMKV will extract all titles
+2. HandBrake will scan all titles
 3. Review list with file sizes and durations
 4. Enter which titles to convert (e.g., `1,3,5` or `all`)
 5. Name each title individually
@@ -1125,23 +1111,23 @@ Example additions:
 
 ## DVD Ripper Troubleshooting
 
-### "MakeMKV not found"
+### "HandBrake CLI not found"
 
-**Install from PPA (Ubuntu/Debian):**
+**Install on Debian/Ubuntu:**
 ```bash
-sudo add-apt-repository ppa:heyarje/makemkv-beta
 sudo apt update
-sudo apt install makemkv-bin makemkv-oss
+sudo apt install handbrake-cli
 ```
 
 **Other distributions:**
-- Download from [makemkv.com](https://www.makemkv.com/download/)
-- Follow distribution-specific instructions
+- **Fedora:** `sudo dnf install HandBrake-cli`
+- **Arch:** `sudo pacman -S handbrake-cli`
+- **Flatpak:** `flatpak install flathub fr.handbrake.ghb`
 
 **Verify installation:**
 ```bash
-which makemkvcon
-makemkvcon --version
+which HandBrakeCLI
+HandBrakeCLI --version
 ```
 
 ### "No DVD detected"
@@ -1169,29 +1155,36 @@ sudo umount /dev/sr0
 - Try ejecting and reinserting
 - Check drive with: `sudo hdparm -I /dev/sr0`
 
-### "MakeMKV extraction failed"
+### "HandBrake extraction failed" / Encrypted DVD Issues
 
-**Registration required:**
-- MakeMKV is free during beta but requires registration
-- Get beta key from [MakeMKV forum](https://www.makemkv.com/forum/viewtopic.php?f=5&t=1053)
-- Enter in MakeMKV settings or create `~/.MakeMKV/settings.conf`
+**Install libdvdcss for DVD decryption:**
+```bash
+# Debian/Ubuntu
+sudo apt install libdvd-pkg
+sudo dpkg-reconfigure libdvd-pkg
+
+# Fedora (RPM Fusion required)
+sudo dnf install libdvdcss
+
+# Arch
+sudo pacman -S libdvdcss
+```
 
 **Test manually:**
 ```bash
-# Get disc info
-makemkvcon info disc:0
+# Scan DVD with HandBrake
+HandBrakeCLI --input /dev/sr0 --title 0 --scan
 
-# Try manual extraction
-mkdir /tmp/test-rip
-makemkvcon mkv disc:0 all /tmp/test-rip
+# Try ripping title 1 to test
+HandBrakeCLI --input /dev/sr0 --title 1 --output test.mp4
 ```
 
 **Common causes:**
 - Damaged/dirty disc - clean with microfiber cloth
-- Unsupported protection - update MakeMKV
+- libdvdcss not installed - required for encrypted DVDs
 - Read error - try in different drive
 
-### "FFmpeg conversion failed"
+### "FFmpeg conversion failed" (Audio extraction)
 
 **Check FFmpeg codecs:**
 ```bash
@@ -1217,42 +1210,46 @@ ffmpeg -i /tmp/dvd-ripper/title00.mkv -c:v libx264 -crf 22 test.mp4
 ### Encrypted/Protected DVDs
 
 **CSS Encryption:**
-MakeMKV handles this automatically. If issues:
+HandBrake uses libdvdcss when available. Install it:
 ```bash
+# Debian/Ubuntu
 sudo apt install libdvd-pkg
 sudo dpkg-reconfigure libdvd-pkg
+
+# Fedora (RPM Fusion)
+sudo dnf install libdvdcss
+
+# Arch
+sudo pacman -S libdvdcss
 ```
 
 **Region Codes:**
-- MakeMKV bypasses region locks
+- HandBrake with libdvdcss bypasses region locks
 - No drive firmware modification needed
 
 **ARccOS, RipGuard, etc.:**
-- MakeMKV handles most commercial protections
-- Update to latest version for new protections
+- libdvdcss handles CSS encryption (most common)
+- More advanced protections may not be supported
+- This is a limitation of free/open-source tools
 
 **If still failing:**
-- Check MakeMKV forums for disc-specific solutions
+- Ensure libdvdcss is correctly installed
 - Try another drive (different chipset)
 - Verify disc plays in regular DVD player
+- Some newer protections may require alternative tools
 
 ### "Out of space" errors
 
-**Temp directory full:**
+**Output directory full:**
 ```bash
 # Check space
-df -h /tmp
-
-# Use different temp location with more space
-# Edit script and change:
-self.temp_dir = "/mnt/large-drive/dvd-temp"
+df -h /path/to/DVD\ Rips
 ```
 
 **General guidance:**
 - DVD source: ~4-8 GB per disc
-- Temp MKV files: ~4-8 GB
 - Final output: 1-4 GB (depending on format/quality)
-- Total space needed: ~15-20 GB free during ripping
+- Total space needed: ~5-10 GB free during ripping
 
 ### Permission issues
 
@@ -1305,7 +1302,7 @@ crf = 26  # instead of 18 or 22
 ## DVD Ripper FAQ
 
 **Q: Will this work with commercial DVDs?**  
-A: Yes, MakeMKV handles encrypted/protected commercial music DVDs.
+A: Yes, HandBrake with libdvdcss handles encrypted/protected commercial music DVDs.
 
 **Q: Can I rip multi-disc DVD sets?**  
 A: Yes, rip each disc separately. The script supports continuous processing.
@@ -1316,7 +1313,7 @@ A: Typically 30-60 minutes total:
 - Conversion: 20-45 minutes (depends on format, quality, CPU)
 
 **Q: Will this work with Blu-rays?**  
-A: Not directly. MakeMKV can extract Blu-rays, but you'll need to use MakeMKV manually. This script is optimized for DVDs.
+A: Not directly with this script. For Blu-rays, use HandBrake GUI or MakeMKV (free during beta). This script is optimized for DVDs.
 
 **Q: Can I preserve multiple audio tracks?**  
 A: Yes, use MKV format. FFmpeg will preserve all audio tracks by default.
@@ -1348,7 +1345,7 @@ A: Yes, use tools like:
 - VLC, Kodi, Plex - Edit metadata in media library
 
 **Q: What if the DVD has multiple camera angles?**  
-A: MakeMKV extracts the default angle. Multiple angles create separate tracks.
+A: HandBrake extracts the default angle. Multiple angles may create separate tracks.
 
 **Q: Can I rip copy-protected DVDs legally?**  
 A: Laws vary by country. In many regions, personal backups are legal. Check local laws.
@@ -1393,10 +1390,10 @@ dvd-ripper
 
 | Package | Purpose |
 |---------|---------|
-| `makemkv-bin` | Proprietary MakeMKV binary |
-| `makemkv-oss` | Open-source MakeMKV components |
+| `handbrake-cli` | DVD ripping, encoding, and format conversion (GPLv2) |
+| `libdvdcss` | CSS decryption for encrypted DVDs (via libdvd-pkg) |
 | `lsdvd` | Reads DVD structure and title information |
-| `ffmpeg` | Video/audio encoding and format conversion |
+| `ffmpeg` | Audio extraction and additional processing |
 | `ffprobe` | Analyzes video metadata and duration |
 | `python3` | Runs the main script |
 
@@ -1417,38 +1414,33 @@ Artist/Album/## - Track Name.ext
 The Rolling Stones/Live Concert 2024/01 - Track 01.mp4
 ```
 
-### Encoding Details
+### Encoding Details (HandBrake)
 
 **H.264 Settings:**
-```bash
--c:v libx264       # Video codec
--crf 18-26         # Quality (lower = better)
--preset slow       # Encoding speed vs compression
--c:a aac           # Audio codec
--b:a 256k          # Audio bitrate
+```
+--encoder x264
+--quality 18-26     (RF/CRF - lower = better)
+--encoder-preset slow/medium/fast
+--aencoder av_aac
+--ab 256
 ```
 
-**H.265 Settings:**
-```bash
--c:v libx265       # Video codec
--crf 18-26         # Quality
--preset slow       # Encoding preset
--tag:v hvc1        # Compatibility tag for Apple devices
--c:a aac           # Audio codec
--b:a 256k          # Audio bitrate
+**H.265/HEVC Settings:**
+```
+--encoder x265
+--quality 18-26
+--encoder-preset slow/medium/fast
+--aencoder av_aac
+--ab 256
 ```
 
-**Audio-only (FLAC):**
+**Audio Extraction (via FFmpeg):**
 ```bash
--vn                # No video
--acodec flac       # Lossless audio
-```
+# FLAC (lossless)
+ffmpeg -i input.mkv -vn -acodec flac output.flac
 
-**Audio-only (MP3):**
-```bash
--vn                # No video
--acodec libmp3lame # MP3 encoder
--ab 320k           # Bitrate (320k = highest MP3 quality)
+# MP3 (320kbps)
+ffmpeg -i input.mkv -vn -acodec libmp3lame -ab 320k output.mp3
 ```
 
 ## Comparison: CD Ripper vs DVD Ripper
@@ -1456,22 +1448,23 @@ The Rolling Stones/Live Concert 2024/01 - Track 01.mp4
 | Feature | CD Ripper | DVD Ripper |
 |---------|-----------|------------|
 | **Primary Use** | Audio CDs | Music DVDs |
-| **Backend** | abcde + cdparanoia | MakeMKV + FFmpeg |
+| **Backend** | abcde + cdparanoia | HandBrake CLI (GPLv2) |
 | **Output Formats** | FLAC only | MP4, MKV, HEVC, FLAC, MP3 |
-| **Quality Control** | Fixed (lossless) | Configurable (CRF 18-26) |
+| **Quality Control** | Fixed (lossless) | Configurable (RF 18-26) |
 | **Metadata** | CDDB/MusicBrainz | Manual entry |
 | **Enhanced Content** | Yes (2nd session) | N/A |
-| **Encryption Handling** | N/A (CDs not encrypted) | Yes (MakeMKV) |
+| **Encryption Handling** | N/A (CDs not encrypted) | Yes (libdvdcss) |
 | **Batch Processing** | Yes | Yes |
 | **Selective Ripping** | No (all tracks) | Yes (choose titles) |
+| **License** | GPL (free) | GPL (free forever) |
 
 ## Related Tools & Resources
 
 ### Complementary Software
-- **MakeMKV GUI** - Visual interface for MakeMKV
-- **HandBrake** - Alternative DVD ripper with GUI
+- **HandBrake GUI** - Visual interface for HandBrake
+- **VLC** - Media player with DVD ripping capability
 - **VidCoder** - Windows HandBrake fork
-- **DVDFab** - Commercial alternative (Windows)
+- **MakeMKV** - Alternative (free during beta, paid after)
 
 ### Media Servers
 - **Plex** - Popular media server
@@ -1485,10 +1478,11 @@ The Rolling Stones/Live Concert 2024/01 - Track 01.mp4
 - **tinyMediaManager** - Organize and tag video library
 
 ### Useful Resources
-- [MakeMKV Forum](https://www.makemkv.com/forum/) - Support and beta keys
+- [HandBrake Documentation](https://handbrake.fr/docs/) - Official guides and best practices
+- [HandBrake Community](https://forum.handbrake.fr/) - Support and community help
 - [FFmpeg Documentation](https://ffmpeg.org/documentation.html) - Encoding guides
-- [Handbrake Guide](https://handbrake.fr/docs/) - Encoding best practices
-- [CRF Guide](https://trac.ffmpeg.org/wiki/Encode/H.264) - Understanding CRF values
+- [CRF Guide](https://trac.ffmpeg.org/wiki/Encode/H.264) - Understanding CRF/RF values
+- [VideoHelp DVD Forum](https://forum.videohelp.com/forums/2-DVD) - DVD ripping discussion
 
 ---
 
