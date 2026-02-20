@@ -669,7 +669,51 @@ A companion tool for extracting and converting music DVD content with configurab
 
 ## DVD Ripper Installation
 
-### Ubuntu/Debian
+### Debian/OpenMediaVault
+
+```bash
+# Install build dependencies and tools
+sudo apt update
+sudo apt install build-essential pkg-config libc6-dev libssl-dev libexpat1-dev \
+  libavcodec-dev libgl1-mesa-dev qtbase5-dev zlib1g-dev lsdvd ffmpeg wget
+
+# Download and compile MakeMKV (latest version)
+cd /tmp
+wget https://www.makemkv.com/download/makemkv-bin-1.17.7.tar.gz
+wget https://www.makemkv.com/download/makemkv-oss-1.17.7.tar.gz
+
+# Extract
+tar xzf makemkv-oss-1.17.7.tar.gz
+tar xzf makemkv-bin-1.17.7.tar.gz
+
+# Compile and install OSS (open source) components
+cd makemkv-oss-1.17.7
+./configure
+make
+sudo make install
+
+# Install binary components
+cd ../makemkv-bin-1.17.7
+make
+sudo make install
+
+# Update library cache
+sudo ldconfig
+
+# Download DVD ripper script
+cd /srv/dev-disk-by-uuid-dc4918d5-6597-465b-9567-ce442fbd8e2a/Github/CD-Ripper
+curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
+chmod +x dvd-ripper.py
+sudo cp dvd-ripper.py /usr/local/bin/
+sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+
+# Verify installation
+makemkvcon --version
+```
+
+**Note:** MakeMKV version numbers change. Check [makemkv.com/download](https://www.makemkv.com/download/) for the latest version and update the URLs accordingly.
+
+### Ubuntu/Linux Mint
 
 ```bash
 # Add MakeMKV PPA
@@ -678,6 +722,38 @@ sudo apt update
 
 # Install packages
 sudo apt install makemkv-bin makemkv-oss lsdvd ffmpeg
+
+# Download DVD ripper script
+curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
+chmod +x dvd-ripper.py
+sudo mv dvd-ripper.py /usr/local/bin/
+sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+```
+
+### Arch Linux
+
+```bash
+# Install from AUR
+yay -S makemkv lsdvd ffmpeg
+
+# Or using paru
+paru -S makemkv lsdvd ffmpeg
+
+# Download DVD ripper script
+curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
+chmod +x dvd-ripper.py
+sudo mv dvd-ripper.py /usr/local/bin/
+sudo ln -s /usr/local/bin/dvd-ripper.py /usr/local/bin/dvd-ripper
+```
+
+### Fedora/RHEL/CentOS
+
+```bash
+# Enable RPM Fusion repository
+sudo dnf install https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+
+# Install MakeMKV and dependencies
+sudo dnf install makemkv lsdvd ffmpeg
 
 # Download DVD ripper script
 curl -O https://raw.githubusercontent.com/WB2024/CD-Ripper/main/dvd-ripper.py
