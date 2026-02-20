@@ -823,54 +823,596 @@ DVD Rips/
 
 ## DVD Ripper Configuration
 
-### Change Output Directory
+### Customizing Output Location
 
-Edit `dvd-ripper.py` and modify:
-```python
-self.base_output_dir = "/your/preferred/path"
+**Method 1: Edit the script**
+
+```bash
+sudo nano /usr/local/bin/dvd-ripper.py
 ```
 
-### Change DVD Device
-
-Edit `dvd-ripper.py` and modify:
+Find and change:
 ```python
-self.dvd_device = "/dev/sr0"  # Change to your device
+self.base_output_dir = "/srv/dev-disk-by-uuid-dc4918d5-6597-465b-9567-ce442fbd8e2a/DVD Rips"
+```
+
+To your preferred location:
+```python
+self.base_output_dir = "/home/youruser/Videos/DVD Rips"
+```
+
+**Method 2: Create a symlink**
+
+```bash
+ln -s /your/actual/path "/srv/dev-disk-by-uuid-dc4918d5-6597-465b-9567-ce442fbd8e2a/DVD Rips"
+```
+
+### DVD Drive Configuration
+
+If your DVD drive is not `/dev/sr0`:
+
+```bash
+# Find your DVD drive
+lsblk
+ls -l /dev/sr*
+
+# Edit the script
+sudo nano /usr/local/bin/dvd-ripper.py
+
+# Change this line:
+self.dvd_device = "/dev/sr0"  # Change to /dev/sr1, etc.
+```
+
+### Temp Directory
+
+MakeMKV extracts to a temporary directory before conversion. Default is `/tmp/dvd-ripper`.
+
+To change it (useful for large DVDs):
+
+```python
+self.temp_dir = "/tmp/dvd-ripper"  # Change to a location with more space
+```
+
+## Features Deep Dive
+
+### Format Comparison
+
+**MP4 (H.264)** - Universal Compatibility
+- Codec: H.264/AVC with AAC audio
+- Compatible with virtually all devices
+- Good compression ratio
+- Widely supported by media servers
+- Best for: Sharing, streaming, maximum compatibility
+
+**MKV (H.264)** - Feature-Rich Container
+- Codec: H.264/AVC with FLAC or AAC audio
+- Supports multiple audio tracks (e.g., commentary, different languages)
+- Supports multiple subtitle tracks
+- Supports chapters and metadata
+- Best for: Archival, multiple audio/subtitle options
+
+**MP4 (H.265/HEVC)** - Maximum Compression
+- Codec: H.265/HEVC with AAC audio
+- 30-50% smaller files than H.264 at same quality
+- Requires modern devices (2015+)
+- Slower encoding time
+- Best for: Storage savings, modern device ecosystems
+
+**Audio Only (FLAC)** - Lossless Audio
+- No video, audio only
+- Bit-perfect audio extraction
+- Larger file sizes than MP3
+- Best for: Music performances, concerts (audio focus)
+
+**Audio Only (MP3)** - Compressed Audio
+- No video, audio only
+- Significantly smaller files
+- Slight quality loss
+- Best for: Portable audio, streaming
+
+### Quality Settings Explained
+
+**High Quality (CRF 18)**
+- Near-transparent quality
+- Recommended for archival purposes
+- File size: ~2-4 GB per hour of video
+- Encoding time: Slow (1-2x realtime on modern CPU)
+
+**Balanced (CRF 22)** - RECOMMENDED
+- Excellent quality, most people can't see difference
+- Great balance of quality and file size
+- File size: ~1-2 GB per hour of video
+- Encoding time: Medium (2-4x realtime)
+
+**Fast/Smaller (CRF 26)**
+- Good quality, some artifacts visible on close inspection
+- Smaller files for portable devices
+- File size: ~0.5-1 GB per hour of video
+- Encoding time: Fast (4-6x realtime)
+
+**CRF Explained:**
+- Constant Rate Factor (CRF) controls video quality
+- Lower CRF = higher quality, larger files
+- Range: 0 (lossless) to 51 (worst quality)
+- CRF 18-22 considered "visually lossless"
+
+### The Ripping Process
+
+1. **DVD Detection** - Checks if DVD is inserted and readable
+2. **Disc Analysis** - Scans DVD structure with lsdvd and MakeMKV
+3. **Format Selection** - User chooses output format and quality
+4. **Metadata Entry** - User provides artist/album information
+5. **MakeMKV Extraction** - Decrypts and extracts DVD titles to MKV
+6. **FFmpeg Conversion** - Transcodes MKV to selected format
+7. **Organization** - Moves files to artist/album folder structure
+8. **Cleanup** - Removes temporary MKV files
+
+### MakeMKV vs Direct Ripping
+
+**Why use MakeMKV as intermediate step?**
+
+- **Copy Protection:** MakeMKV handles CSS, region codes, and other protections
+- **VOB Handling:** Properly joins split VOB files into complete titles
+- **Track Detection:** Intelligently identifies main content vs. extras
+- **Quality:** Lossless extraction before encoding
+
+**Direct ripping with FFmpeg** would fail on encrypted DVDs and struggle with DVD structure.
+
+## DVD Types Supported
+
+### Music DVDs
+- Concert performances
+- Live albums
+- Music video collections
+- Behind-the-scenes documentaries
+- Special editions with bonus content
+
+### Commercial Music Video DVDs
+- Artist video compilations
+- MTV/VH1 collections
+- Themed video collections
+
+### Video Quality Expectations
+
+**DVD Video Specifications:**
+- Resolution: 720×480 (NTSC) or 720×576 (PAL)
+- Aspect Ratio: Usually 16:9 or 4:3
+- Bitrate: ~5-8 Mbps average
+- Audio: AC3, DTS, PCM, or MP2
+
+**Output Quality:**
+- Maintained at source resolution (no upscaling)
+- Deinterlaced when necessary
+- Color space preserved
+- Audio transcoded to selected format
+
+## Advanced Usage
+
+### Batch Processing Multiple DVDs
+
+The script supports continuous ripping:
+
+```bash
+dvd-ripper
+# Rip first DVD, then when asked "Rip another DVD?" choose Yes
+# Eject, insert next DVD, repeat
+```
+
+### Selective Title Ripping
+
+Use Selective Mode when DVDs have both main content and extras:
+
+1. Choose **Selective Mode** when prompted
+2. MakeMKV will extract all titles
+3. Review list with file sizes and durations
+4. Enter which titles to convert (e.g., `1,3,5` or `all`)
+5. Name each title individually
+
+**Example:**
+```
+Extracted titles:
+  1. title00.mkv (4.2 GB, 45m 30s)  ← Main concert
+  2. title01.mkv (150 MB, 2m 45s)   ← Trailer
+  3. title02.mkv (800 MB, 12m 15s)  ← Behind the scenes
+
+Enter title numbers to convert: 1,3
+```
+
+### Network Storage
+
+Works great with NAS/network shares:
+
+```bash
+# Mount network share
+sudo mount -t cifs //nas/videos /mnt/nas -o username=user,password=pass
+
+# Update output directory in script or create symlink
+sudo ln -s /mnt/nas "/srv/long-path/DVD Rips"
+
+# Run ripper - 777 permissions ensure NAS compatibility
+dvd-ripper
+```
+
+### Custom FFmpeg Arguments
+
+For advanced users wanting custom encoding:
+
+Edit [dvd-ripper.py](dvd-ripper.py) in the `convert_file()` method to add custom FFmpeg flags.
+
+Example additions:
+```python
+# Add 2-pass encoding
+# Add custom filters
+# Add HDR metadata
+# Add specific audio tracks
 ```
 
 ## DVD Ripper Troubleshooting
 
 ### "MakeMKV not found"
 
+**Install from PPA (Ubuntu/Debian):**
 ```bash
-# Install from PPA (Ubuntu/Debian)
 sudo add-apt-repository ppa:heyarje/makemkv-beta
 sudo apt update
 sudo apt install makemkv-bin makemkv-oss
+```
 
-# Or download from makemkv.com for other distros
+**Other distributions:**
+- Download from [makemkv.com](https://www.makemkv.com/download/)
+- Follow distribution-specific instructions
+
+**Verify installation:**
+```bash
+which makemkvcon
+makemkvcon --version
 ```
 
 ### "No DVD detected"
 
+**Check drive exists:**
 ```bash
-# Check drive
 ls -l /dev/sr*
-
-# Test with lsdvd
-lsdvd /dev/sr0
+# Should show: /dev/sr0, /dev/sr1, etc.
 ```
+
+**Test with lsdvd:**
+```bash
+lsdvd /dev/sr0
+# Should show DVD information
+```
+
+**If DVD is mounted (prevents ripping):**
+```bash
+mount | grep sr0
+sudo umount /dev/sr0
+```
+
+**Drive not spinning up:**
+- Ensure DVD is fully inserted
+- Try ejecting and reinserting
+- Check drive with: `sudo hdparm -I /dev/sr0`
 
 ### "MakeMKV extraction failed"
 
-- Ensure MakeMKV is registered (free during beta)
-- Check if DVD is clean and readable
-- Try `makemkvcon info disc:0` manually
+**Registration required:**
+- MakeMKV is free during beta but requires registration
+- Get beta key from [MakeMKV forum](https://www.makemkv.com/forum/viewtopic.php?f=5&t=1053)
+- Enter in MakeMKV settings or create `~/.MakeMKV/settings.conf`
+
+**Test manually:**
+```bash
+# Get disc info
+makemkvcon info disc:0
+
+# Try manual extraction
+mkdir /tmp/test-rip
+makemkvcon mkv disc:0 all /tmp/test-rip
+```
+
+**Common causes:**
+- Damaged/dirty disc - clean with microfiber cloth
+- Unsupported protection - update MakeMKV
+- Read error - try in different drive
+
+### "FFmpeg conversion failed"
+
+**Check FFmpeg codecs:**
+```bash
+ffmpeg -codecs | grep -E 'h264|h265|hevc'
+ffmpeg -encoders | grep -E 'libx264|libx265'
+```
+
+**If libx264 missing:**
+```bash
+sudo apt install ffmpeg libavcodec-extra
+```
+
+**If libx265 missing:**
+```bash
+sudo apt install libx265-dev
+```
+
+**Test manual conversion:**
+```bash
+ffmpeg -i /tmp/dvd-ripper/title00.mkv -c:v libx264 -crf 22 test.mp4
+```
 
 ### Encrypted/Protected DVDs
 
-MakeMKV handles most DVD encryption. If issues persist:
-- Update MakeMKV to latest version
-- Check MakeMKV forums for specific disc issues
+**CSS Encryption:**
+MakeMKV handles this automatically. If issues:
+```bash
+sudo apt install libdvd-pkg
+sudo dpkg-reconfigure libdvd-pkg
+```
+
+**Region Codes:**
+- MakeMKV bypasses region locks
+- No drive firmware modification needed
+
+**ARccOS, RipGuard, etc.:**
+- MakeMKV handles most commercial protections
+- Update to latest version for new protections
+
+**If still failing:**
+- Check MakeMKV forums for disc-specific solutions
+- Try another drive (different chipset)
+- Verify disc plays in regular DVD player
+
+### "Out of space" errors
+
+**Temp directory full:**
+```bash
+# Check space
+df -h /tmp
+
+# Use different temp location with more space
+# Edit script and change:
+self.temp_dir = "/mnt/large-drive/dvd-temp"
+```
+
+**General guidance:**
+- DVD source: ~4-8 GB per disc
+- Temp MKV files: ~4-8 GB
+- Final output: 1-4 GB (depending on format/quality)
+- Total space needed: ~15-20 GB free during ripping
+
+### Permission issues
+
+**Run with sudo:**
+```bash
+sudo dvd-ripper
+```
+
+**Or add user to cdrom group:**
+```bash
+sudo usermod -a -G cdrom $USER
+# Log out and back in for changes to take effect
+```
+
+**Output directory permissions:**
+```bash
+sudo chmod -R 777 "/path/to/DVD Rips"
+# Or better, set ownership:
+sudo chown -R $USER:$USER "/path/to/DVD Rips"
+```
+
+### Slow ripping/encoding
+
+**Extraction slow:**
+- DVD drive speed limitation (usually 8-16x)
+- Damaged disc requires multiple retries
+- Normal: 10-30 minutes for extraction
+
+**Encoding slow:**
+- CPU-intensive process
+- HEVC (H.265) is slower than H.264
+- "High Quality" preset is slower than "Fast"
+- Normal speeds:
+  - H.264 Fast: 4-6x realtime
+  - H.264 Medium: 2-4x realtime
+  - H.264 Slow: 1-2x realtime
+  - H.265: 50% slower than H.264
+
+**Speed improvements:**
+```bash
+# Use faster preset (in script)
+preset = 'fast'  # instead of 'medium' or 'slow'
+
+# Use H.264 instead of H.265
+
+# Lower CRF (lower quality, faster)
+crf = 26  # instead of 18 or 22
+```
+
+## DVD Ripper FAQ
+
+**Q: Will this work with commercial DVDs?**  
+A: Yes, MakeMKV handles encrypted/protected commercial music DVDs.
+
+**Q: Can I rip multi-disc DVD sets?**  
+A: Yes, rip each disc separately. The script supports continuous processing.
+
+**Q: How long does it take to rip a DVD?**  
+A: Typically 30-60 minutes total:
+- Extraction: 10-30 minutes (depends on drive speed)
+- Conversion: 20-45 minutes (depends on format, quality, CPU)
+
+**Q: Will this work with Blu-rays?**  
+A: Not directly. MakeMKV can extract Blu-rays, but you'll need to use MakeMKV manually. This script is optimized for DVDs.
+
+**Q: Can I preserve multiple audio tracks?**  
+A: Yes, use MKV format. FFmpeg will preserve all audio tracks by default.
+
+**Q: What about subtitles?**  
+A: MKV format preserves all subtitles. MP4 may lose some subtitle tracks.
+
+**Q: How do I add chapters?**  
+A: MKV format preserves DVD chapters automatically.
+
+**Q: Can I upscale DVD to 1080p?**  
+A: Not recommended. DVD is 480p/576p max. Upscaling doesn't add detail, just makes files larger. Better to keep source resolution.
+
+**Q: Which format should I choose?**  
+A: 
+- **General use:** MP4 (H.264) - works everywhere
+- **Archival:** MKV (H.264) - preserves all features
+- **Storage limited:** MP4 (H.265) - smallest files
+- **Audio only:** FLAC - perfect for concerts where video isn't important
+
+**Q: Are the rips as good as the original DVD?**  
+A: With High Quality preset (CRF 18), visually identical. With Balanced (CRF 22), most people cannot see any difference.
+
+**Q: Can I edit metadata after ripping?**  
+A: Yes, use tools like:
+- `ffmpeg` - Command-line metadata editing
+- MKVToolNix - GUI for MKV files
+- MediaInfo - View metadata
+- VLC, Kodi, Plex - Edit metadata in media library
+
+**Q: What if the DVD has multiple camera angles?**  
+A: MakeMKV extracts the default angle. Multiple angles create separate tracks.
+
+**Q: Can I rip copy-protected DVDs legally?**  
+A: Laws vary by country. In many regions, personal backups are legal. Check local laws.
+
+## Use Cases
+
+### Archive Concert DVD Collection
+```bash
+# Preserve your concert DVDs digitally
+# MKV format maintains all features
+# High Quality preset for archival
+dvd-ripper
+# Select: MKV (H.264), High Quality
+```
+
+### Convert for Mobile Devices
+```bash
+# Smaller files for phones/tablets
+dvd-ripper
+# Select: MP4 (H.265), Fast/Smaller
+```
+
+### Extract Audio from Concert DVDs
+```bash
+# Get just the audio for music library
+dvd-ripper
+# Select: Audio Only (FLAC)
+# Import to Plex, Jellyfin, etc.
+```
+
+### Prepare for Media Server
+```bash
+# Rip entire collection for Plex/Jellyfin
+# MP4 for maximum compatibility
+dvd-ripper
+# Select: MP4 (H.264), Balanced
+```
+
+## Technical Details
+
+### Dependencies Explained
+
+| Package | Purpose |
+|---------|---------|
+| `makemkv-bin` | Proprietary MakeMKV binary |
+| `makemkv-oss` | Open-source MakeMKV components |
+| `lsdvd` | Reads DVD structure and title information |
+| `ffmpeg` | Video/audio encoding and format conversion |
+| `ffprobe` | Analyzes video metadata and duration |
+| `python3` | Runs the main script |
+
+### File Naming
+
+**Sanitization:**
+- Removes invalid characters: `/ \ : * ? " < > |`
+- Replaces underscores with spaces
+- Handles Unicode characters
+
+**Format:**
+```
+Artist/Album/## - Track Name.ext
+```
+
+**Example:**
+```
+The Rolling Stones/Live Concert 2024/01 - Track 01.mp4
+```
+
+### Encoding Details
+
+**H.264 Settings:**
+```bash
+-c:v libx264       # Video codec
+-crf 18-26         # Quality (lower = better)
+-preset slow       # Encoding speed vs compression
+-c:a aac           # Audio codec
+-b:a 256k          # Audio bitrate
+```
+
+**H.265 Settings:**
+```bash
+-c:v libx265       # Video codec
+-crf 18-26         # Quality
+-preset slow       # Encoding preset
+-tag:v hvc1        # Compatibility tag for Apple devices
+-c:a aac           # Audio codec
+-b:a 256k          # Audio bitrate
+```
+
+**Audio-only (FLAC):**
+```bash
+-vn                # No video
+-acodec flac       # Lossless audio
+```
+
+**Audio-only (MP3):**
+```bash
+-vn                # No video
+-acodec libmp3lame # MP3 encoder
+-ab 320k           # Bitrate (320k = highest MP3 quality)
+```
+
+## Comparison: CD Ripper vs DVD Ripper
+
+| Feature | CD Ripper | DVD Ripper |
+|---------|-----------|------------|
+| **Primary Use** | Audio CDs | Music DVDs |
+| **Backend** | abcde + cdparanoia | MakeMKV + FFmpeg |
+| **Output Formats** | FLAC only | MP4, MKV, HEVC, FLAC, MP3 |
+| **Quality Control** | Fixed (lossless) | Configurable (CRF 18-26) |
+| **Metadata** | CDDB/MusicBrainz | Manual entry |
+| **Enhanced Content** | Yes (2nd session) | N/A |
+| **Encryption Handling** | N/A (CDs not encrypted) | Yes (MakeMKV) |
+| **Batch Processing** | Yes | Yes |
+| **Selective Ripping** | No (all tracks) | Yes (choose titles) |
+
+## Related Tools & Resources
+
+### Complementary Software
+- **MakeMKV GUI** - Visual interface for MakeMKV
+- **HandBrake** - Alternative DVD ripper with GUI
+- **VidCoder** - Windows HandBrake fork
+- **DVDFab** - Commercial alternative (Windows)
+
+### Media Servers
+- **Plex** - Popular media server
+- **Jellyfin** - Open-source Plex alternative
+- **Emby** - Media server platform
+- **Kodi** - Media center software
+
+### Metadata Tools
+- **MKVToolNix** - Edit MKV metadata
+- **MediaInfo** - View media file information
+- **tinyMediaManager** - Organize and tag video library
+
+### Useful Resources
+- [MakeMKV Forum](https://www.makemkv.com/forum/) - Support and beta keys
+- [FFmpeg Documentation](https://ffmpeg.org/documentation.html) - Encoding guides
+- [Handbrake Guide](https://handbrake.fr/docs/) - Encoding best practices
+- [CRF Guide](https://trac.ffmpeg.org/wiki/Encode/H.264) - Understanding CRF values
 
 ---
 
